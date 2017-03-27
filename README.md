@@ -6,15 +6,20 @@ A Python library for accessing UCI EEE automatically. Also contains useful utili
 * `requests`
 * `beautifulsoup4`
 
-## WebAuth
+## StudentAccess
+* `pyeee.sites.studentaccess`
+
+## WebAuthBot
+* `pyeee.utils.webauth`
+
 PyEEE provides a wrapper around Session in [Requests](http://www.python-requests.org/), to help you authenticate to WebAuth automatically.
 
 ```
-import pyeee
 import requests
-eee = pyeee.EEE('your_ucinetid', 'your_password')
+from pyeee.utils.webauth import WebAuthBot
+wab = WebAuthBot('your_ucinetid', 'your_password')
 s = requests.Session()
-eee.attachSession(s)
+wab.attachSession(s)
 ```
 
 Now the session has superpowers! Use `get()`, `post()` and other methods as you normally would, and PyEEE will automatically authenticate you with WebAuth in case you get redirected to a login page.
