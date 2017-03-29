@@ -5,6 +5,9 @@ import urllib.parse
 from bs4 import BeautifulSoup
 
 WEBAUTH_ENDPOINT = 'https://login.uci.edu/ucinetid/webauth'
+SHIBIDP_REMOTE_ENDPOINT = 'https://shib.nacs.uci.edu/idp/Authn/RemoteUser'
+SHIBIDP_SAML_REDIRECT = 'https://shib.nacs.uci.edu:443/idp/profile/SAML2/Redirect/SSO'
+
 EEE_NETLOC = 'eee.uci.edu'
 
 AUTH_MARKERS = {
@@ -62,18 +65,25 @@ class WebAuthBot:
                 parsed = urllib.parse.urlparse(response.url)
                 if response.url.startswith(WEBAUTH_ENDPOINT):
                     # Needs authentication
-                    needsAuth = True
+                    needsAuth = response.url
+                elif response.url.startswith(SHIBIDP_SAML_REDIRECT):
+                    # Already authed via Shibboleth
+                    needsAuth = False
+                    url = eeeobj._handleSamlRedirect(response, self)
+                    response = requests.Session.request(self, method, url, **kwargs)
                 elif parsed.netloc in AUTH_MARKERS and response.headers['content-type'].startswith('text/html'):
+                    # Check logged-in markers
                     soup = BeautifulSoup(response.text, 'html.parser')
                     if soup.find(*AUTH_MARKERS[parsed.netloc]['auth']):
                         needsAuth = False
                     else:
-                        needsAuth = True
+                        needsAuth = url
                 else:
+                    # We are clear :)
                     needsAuth = False
 
                 if needsAuth:
-                    target = eeeobj.authenticate(url, self)
+                    target = eeeobj.authenticate(needsAuth, self)
                     targetres = requests.Session.request(self, method, target, **kwargs)
                     if targetres.url.startswith(WEBAUTH_ENDPOINT):
                         raise WebAuthLoopError
@@ -157,9 +167,37 @@ class WebAuthBot:
             if not matches:
                 raise WebAuthUnknownError('Malformed content attribute: {}'.format(redirect['content']))
 
-            return matches.group(1)
+            finalUrl = matches.group(1)
+            if finalUrl.startswith(SHIBIDP_REMOTE_ENDPOINT):
+                # Shibboleth IDP
+                session.eee = False
+                idp = session.get(finalUrl)
+                session.eee = True
+
+                if not idp.url.startswith(SHIBIDP_SAML_REDIRECT):
+                    raise WebAuthUnknownError('Unexpected Shibboleth redirect: {}'.format(idp.url))
+
+                return self._handleSamlRedirect(idp, session)
+
+            return finalUrl
         else:
             # WebAuth is not supposed to do that
             # Don't know what to do - Let's bail
             raise WebAuthUnknownError
+
+    def _handleSamlRedirect(self, response: requests.Response, session: requests.Session) -> str:
+        soup = BeautifulSoup(response.text, 'html.parser')
+        samlForm = soup.find('form', {'method': 'post'})
+
+        if not samlForm or not samlForm.input:
+            raise WebAuthUnknownError('Could not locate SAML response form')
+
+        samlAction = samlForm['action']
+        samlResponse = samlForm.input['value']
+
+        consumer = session.post(samlAction, data={
+            'SAMLResponse': samlResponse
+        })
+
+        return consumer.url
     
