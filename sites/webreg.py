@@ -184,7 +184,7 @@ class WebReg:
         Raises:
             One of the WebReg errors.
         """
-        self.navigate('enrollmentMenu')
+        #self.navigate('enrollmentMenu')
         post = {
             'mode': mode,
             'courseCode': courseCode,
@@ -207,7 +207,7 @@ class WebReg:
                         raise exception()
 
             raise WebRegEnrollmentError(msg)
-        self.navigate('enrollQtrMenu')
+        #self.navigate('enrollQtrMenu')
         return response
 
     def addCourse(self, *args, **kwargs):
