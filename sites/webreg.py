@@ -52,6 +52,12 @@ class WebRegClassLevelError(WebRegEnrollmentError):
     """
     pass
 
+class WebRegEnrollmentNotOpenError(WebRegAuthError):
+    """The user's enrollment isn't open yet, and as a result,
+    we have been logged out.
+    """
+    pass
+
 
 WEBREG_REDIRECT = 'https://www.reg.uci.edu/cgi-bin/webreg-redirect.sh'
 WEBREG_ERRORS = [
@@ -129,6 +135,10 @@ class WebReg:
         soup = BeautifulSoup(response.text, 'html.parser')
 
         if soup.find('table', {'id': 'webreg-login-box'}):
+            wrInfo = soup.find('div', {'class': 'WebRegInfoMsg'})
+            if wrInfo and 'enrollment window opens on' in wrInfo.string:
+                raise WebRegEnrollmentNotOpenError
+
             # We are logged out
             if not nologin:
                 self.authenticate()
